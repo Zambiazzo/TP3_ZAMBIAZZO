@@ -1,0 +1,202 @@
+---
+title: "TP3_GIT"
+author: "Yanina Zambiazzo"
+date: "22/9/2021"
+output: html_document
+---
+
+
+**TP3**
+*Alumna: Yanina Zambiazzo*
+
+Elegir alguna fuente de datos, importarla en un proyecto de R, limpiarlos, transformalos, describirlos.
+
+
+
+Trabajaré sobre la base de datos de *venta de departamentos en CABA*.
+#Fuente: Buenos Aires Data
+
+
+
+**1- Comenzare cargando las librerías**
+
+
+```{r}
+library(tidyverse)
+library(geofacet)
+library(sf)
+library(png)
+library(transformr)
+```
+```{r}
+library(gganimate)
+```
+**2- Cargo los datos exportados de los TPs anteriores:**
+
+```{r}
+departamentos_en_venta <- read.csv("departamentos-en-venta-2001.csv", stringsAsFactors = TRUE, encoding = "latin1", header = TRUE, sep = ";")
+```
+
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+
+options(scipen=99)
+```
+
+
+```{r}
+head(departamentos_en_venta, 10)
+```
+
+
+Vamos a empezar por graficar a través de un histograma la distribución de la cantidad de unidades publicadas con Balcón por barrio
+
+
+```{r}
+FILTROBALCON <-filter(departamentos_en_venta, TERRAZA=="BALCON")
+head(FILTROBALCON)
+```
+
+
+```{r}
+lm_simple<- lm(data=departamentos_en_venta, M2 ~ DOLARES)
+```
+
+
+
+```{r}
+lm_simple
+```
+```{r}
+summary(lm_simple)
+```
+Ahora, vamos a realizar un modelo de regresión lineal para las variables de M2 y valor de la propiedad
+
+```{r fig.width=13, fig.height=6}
+ggplot(FILTROBALCON) +
+ geom_bar(aes(x = BARRIO, colour = BARRIO)) +
+ labs(title="'Publicaciones con Balcon'", subtitle ="fuente: https://data.buenosaires.gob.ar/dataset/departamentos-venta", x= "BARRIO", y= "VALOR DE VENTA") +
+theme_minimal() +
+scale_color_viridis_d(option = "magma") +
+coord_flip() + 
+facet_wrap(~TERRAZA)
+```
+
+Ahora vamos a realizar un gráfico de puntos, tomando como referencia las propiedades en venta en Comuna 6, sus M2 y su valor de venta
+
+
+```{r}
+FILTROTERRAZA <-filter(departamentos_en_venta, COMUNA=="6")
+head(FILTROTERRAZA)
+```
+
+
+```{r}
+ggplot(data=FILTROTERRAZA) + geom_point(aes(x=DOLARES,y=M2, color=TERRAZA)) +labs(caption="Atención: los valores de venta en dólares están en escala logarítmica", title="'Valores Comuna 6'", subtitle = "fuente: https://data.buenosaires.gob.ar/dataset/departamentos-venta") + theme_minimal() + scale_color_viridis_d(option = "magma") +scale_x_log10()
+```
+Ahora, vamos a graficar la distribución del valor del m2 por Comuna, teniendo en cuenta el tipo de Terraza que tiene cada propiedad (Balcón, Balcón Terraza, Jardín, Patio, Terraza)
+
+
+```{r}
+seleccion <- select(departamentos_en_venta, COMUNA, U_S_M2, TERRAZA) %>%
+group_by(COMUNA,TERRAZA) %>%
+summarise (prom_u_s_m2 = mean(U_S_M2))
+```
+
+
+
+```{r}
+ggplot(seleccion) +
+ geom_col(aes(x = COMUNA, y = prom_u_s_m2 , fill= TERRAZA)) +
+ labs(title="'Comuna a Comuna, Terraza a Terraza'", subtitle ="fuente: https://data.buenosaires.gob.ar/dataset/departamentos-venta", x= "Comuna", y=  "Valor por M2") +
+theme_minimal() +
+scale_color_viridis_d(option = "magma") +
+coord_flip() + 
+facet_wrap(~TERRAZA)
+```
+
+
+**3- Agrego la información geográfica de las Comunas de CABA:**
+
+```{r}
+options(scipen=99)
+```
+
+```{r}
+Comunas <- st_read("comunas.shp")
+```
+
+
+
+A continuación, sumaremos el shape de comunas de CABA para poder observar de una mejor manera la distribución geográfica de los datos:
+
+
+```{r}
+ggplot(Comunas)+ 
+  geom_sf(aes(fill=COMUNAS), color=NA)+
+  labs(title="Comunas", subtitle = "fuente: https://data.buenosaires.gob.ar/dataset/Comunas")+
+  scale_fill_distiller(palette = "Spectral") + theme_void() +  geom_sf_label( aes(label = COMUNAS), size=3)
+```
+
+
+```{r fig.width=13, fig.height=6}
+ggplot(Comunas)+
+  geom_sf(aes(fill=BARRIOS), color=NA)+
+  labs(title="Barrios por Comuna", subtitle = "fuente: https://data.buenosaires.gob.ar/dataset/Comunas")+
+  theme_void()+
+  scale_fill_viridis_d()
+```
+
+A continuación graficaremos las superficies correspondientes a cada Comuna
+
+
+
+```{r}
+seleccion <- select(departamentos_en_venta, COMUNA, U_S_M2, BARRIO,LAT, LON) %>%
+group_by(COMUNA) %>%
+summarise (prom_u_s_m2 = mean(U_S_M2))
+
+```
+
+```{r}
+ggplot(Comunas) +
+  geom_sf(data=Comunas, aes(fill=AREA), color="NA") + 
+  theme_void()+
+  labs(title="Superficies comunas",
+       subtitle="Ciudad de Buenos Aires", caption= "Fuente: Ba Data")
+```
+
+
+
+Ahora trabajare con un dataset sobre los precios de terrenos en CABA, correspondientes al año 2018
+
+
+```{r}
+Terrenos2018 <- read.csv("precio-de-terrenos-2018.csv")
+```
+
+
+Para poder vincular y graficar los datos significativos, vamos primero a calcular el promedio de venta de terrenos del m2 por comuna:
+
+
+
+```{r}
+seleccion <- select(Terrenos2018, comuna, preciousdm, barrio) %>%
+group_by(comuna) %>%
+summarise (prom_u_s_m2 = mean(preciousdm))
+```
+
+```{r}
+Join <- left_join(Comunas, seleccion, by=c("COMUNAS"="comuna"))
+```
+
+
+```{r}
+ggplot(Join)+
+  geom_sf(aes(fill=prom_u_s_m2), color="NA")+
+  labs(title="Valor m2 promedio por Comuna", subtitle = "fuente: https://data.buenosaires.gob.ar/dataset/Comunas")+
+  theme_void()
+```
+
